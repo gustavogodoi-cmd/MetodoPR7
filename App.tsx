@@ -15,7 +15,7 @@ const App: React.FC = () => {
   useEffect(() => {
   const SHEET_ID = "1MdDoijE28-1ZH37EdL446H-u5IgqdmbZwYjGt20qPps";
   const API_KEY = "AIzaSyAyIXDSpOqgxzU4jBR86Lqb__CidW84dZg";
-  const RANGE = "Dados"!A:E"; // ajuste o nome da aba se for diferente
+  const RANGE = "Dados!A:E"; // ajuste o nome da aba se for diferente
 
   const fetchData = async () => {
     try {
@@ -37,6 +37,8 @@ const App: React.FC = () => {
         email: row[2] || "sem_email",
         responseDate: new Date(row[0]),
       }));
+      console.log("📄 Dados da planilha recebidos:", json.values);
+      console.log("✅ Registros convertidos:", newRecords);
 
       setRecords(newRecords);
     } catch (error) {
