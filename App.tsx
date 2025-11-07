@@ -15,7 +15,7 @@ const App: React.FC = () => {
   useEffect(() => {
   const SHEET_ID = "1MdDoijE28-1ZH37EdL446H-u5IgqdmbZwYjGt20qPps";
   const API_KEY = "AIzaSyAyIXDSpOqgxzU4jBR86Lqb__CidW84dZg";
-  const RANGE = "Respostas!A:E"; // ajuste o nome da aba se for diferente
+  const RANGE = "Dados!A:E"; // ajuste o nome da aba se for diferente
 
   const fetchData = async () => {
     try {
