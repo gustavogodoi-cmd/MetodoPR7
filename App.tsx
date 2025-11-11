@@ -32,26 +32,45 @@ const App: React.FC = () => {
         const rows = json.values.slice(1); // ignora cabeçalho
 
         const newRecords = rows
-          .map((row: string[]) => {
-            const rawDate = row[0]; // Carimbo de data/hora
-            const rawTreinoDate = row[3]; // Data do treino
-            const parsedDate = new Date(rawDate || rawTreinoDate);
+  .map((row: string[]) => {
+    const rawDate = row[0]; // Carimbo de data/hora
+    const rawTreinoDate = row[3]; // Data do treino
 
-            if (isNaN(parsedDate.getTime())) {
-              console.warn("⚠️ Data inválida ignorada:", rawDate, rawTreinoDate);
-              return null;
-            }
+    // 🔧 Função auxiliar para corrigir formato americano (MM/DD/YYYY)
+    const parseDate = (dateStr: string | undefined) => {
+      if (!dateStr) return null;
 
-            return {
-              fullName: row[1] || "Desconhecido",        // Nome do aluno
-              trained: row[2] || "Não informado",         // Treinou hoje?
-              trainingDate: row[3] || "Sem data",         // Data do treino
-              email: row[5] || "sem_email",               // Endereço de e-mail
-              diet: row[6] || "Não informado",            // Fez a dieta hoje?
-              responseDate: parsedDate,                   // Data convertida
-            };
-          })
-          .filter((record): record is AttendanceRecord => record !== null);
+      // Se tiver barras (/) e for no formato MM/DD/YYYY
+      if (dateStr.includes("/")) {
+        const parts = dateStr.split("/");
+        if (parts.length === 3 && parts[0].length <= 2 && parts[1].length <= 2) {
+          const [month, day, year] = parts;
+          return new Date(`${year}-${day}-${month}`);
+        }
+      }
+
+      // Tenta converter normalmente (ISO ou outro formato)
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const parsedDate = parseDate(rawDate) || parseDate(rawTreinoDate);
+    if (!parsedDate) {
+      console.warn("⚠️ Data inválida ignorada:", rawDate, rawTreinoDate);
+      return null;
+    }
+
+    return {
+      fullName: row[1] || "Desconhecido",        // Nome do aluno
+      trained: row[2] || "Não informado",         // Treinou hoje?
+      trainingDate: row[3] || "Sem data",         // Data do treino
+      email: row[5] || "sem_email",               // Endereço de e-mail
+      diet: row[6] || "Não informado",            // Fez a dieta hoje?
+      responseDate: parsedDate,                   // ✅ Data corrigida
+    };
+  })
+  .filter((record) => record !== null); // remove registros inválidos
+
 
         console.log("📄 Dados da planilha recebidos:", json.values);
         console.log("✅ Registros convertidos:", newRecords);
