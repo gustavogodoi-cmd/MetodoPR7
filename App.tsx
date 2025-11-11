@@ -1,15 +1,14 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { AttendanceRecord, Student, TimeSeriesData } from './types';
-import { generateNewRecord } from './services/mockDataService';
-import { TOTAL_CLASSES } from './constants';
+import React, { useState, useMemo, useEffect } from 'react';
+import { AttendanceRecord, Student } from './types';
 import Dashboard from './components/Dashboard';
 import StudentList from './components/StudentList';
 import StudentDetailModal from './components/StudentDetailModal';
 import { Header } from './components/Header';
+import DietDashboard from './components/DietDashboard';
 
 const App: React.FC = () => {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [view, setView] = useState<'dashboard' | 'students'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'students' | 'dietas'>('dashboard');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
   useEffect(() => {
@@ -31,179 +30,79 @@ const App: React.FC = () => {
 
         const rows = json.values.slice(1); // ignora cabeçalho
 
-        const newRecords = rows
-  .map((row: string[]) => {
-    const rawDate = row[0]; // Carimbo de data/hora
-    const rawTreinoDate = row[3]; // Data do treino
+        const newRecords = rows.map((row: string[]) => {
+          const rawDate = row[0]; // Carimbo de data/hora (A)
+          const treinoDate = row[3]; // Data do treino (D)
+          const raw = (rawDate || treinoDate || "").trim();
 
-    // 🔧 Função auxiliar para corrigir formato americano (MM/DD/YYYY)
-    const parseDate = (dateStr: string | undefined) => {
-      if (!dateStr) return null;
+          const parseDate = (dateStr: string | undefined): Date | null => {
+            if (!dateStr) return null;
+            const s = dateStr.trim();
 
-      // Se tiver barras (/) e for no formato MM/DD/YYYY
-      if (dateStr.includes("/")) {
-        const parts = dateStr.split("/");
-        if (parts.length === 3 && parts[0].length <= 2 && parts[1].length <= 2) {
-          const [month, day, year] = parts;
-          return new Date(`${year}-${day}-${month}`);
-        }
-      }
+            // Formato brasileiro dd/mm/yyyy ou dd/mm/yyyy hh:mm:ss
+            if (s.includes('/')) {
+              const [datePart, timePart] = s.split(' ');
+              const [day, month, year] = datePart.split(/[\/\-]/).map(Number);
+              const [hour, minute, second] = timePart ? timePart.split(':').map(Number) : [0, 0, 0];
+              const d = new Date(year, month - 1, day, hour, minute, second || 0);
+              return isNaN(d.getTime()) ? null : d;
+            }
 
-      // Tenta converter normalmente (ISO ou outro formato)
-      const d = new Date(dateStr);
-      return isNaN(d.getTime()) ? null : d;
-    };
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? null : d;
+          };
 
-    const parsedDate = parseDate(rawDate) || parseDate(rawTreinoDate);
-    if (!parsedDate) {
-      console.warn("⚠️ Data inválida ignorada:", rawDate, rawTreinoDate);
-      return null;
-    }
+          const parsedDate = parseDate(raw);
 
-    return {
-      fullName: row[1] || "Desconhecido",        // Nome do aluno
-      trained: row[2] || "Não informado",         // Treinou hoje?
-      trainingDate: row[3] || "Sem data",         // Data do treino
-      email: row[5] || "sem_email",               // Endereço de e-mail
-      diet: row[6] || "Não informado",            // Fez a dieta hoje?
-      responseDate: parsedDate,                   // ✅ Data corrigida
-    };
-  })
-  .filter((record) => record !== null); // remove registros inválidos
-
-
-        console.log("📄 Dados da planilha recebidos:", json.values);
-        console.log("✅ Registros convertidos:", newRecords);
+          return {
+            fullName: row[1] || "Desconhecido",  // Nome do aluno (B)
+            trained: row[2] || "Não informado",   // Treinou hoje? (C)
+            trainingDate: row[3] || "Sem data",   // Data do treino (D)
+            email: row[5] || "sem_email",         // Endereço de e-mail (F)
+            diet: row[6] || "0",                  // Fez a dieta hoje? (G)
+            responseDate: parsedDate,             // Data convertida
+          };
+        }).filter(Boolean) as AttendanceRecord[];
 
         setRecords(newRecords);
       } catch (error) {
-        console.error("Erro ao buscar dados da planilha:", error);
+        console.error("Erro ao buscar dados:", error);
       }
     };
 
     fetchData();
-
-    const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
   }, []);
 
-  const addNewRecord = useCallback(() => {
-    const newRecord = generateNewRecord();
-    setRecords(prevRecords =>
-      [...prevRecords, newRecord].sort(
-        (a, b) => a.responseDate.getTime() - b.responseDate.getTime()
-      )
-    );
-  }, []);
-
-  const processedData = useMemo(() => {
-    const studentData: { [key: string]: { presences: number; history: Date[]; trainedDays: number; dietDays: number } } = {};
-
-    for (const record of records) {
-      const email = record.email;
-      if (!studentData[email]) {
-        studentData[email] = { presences: 0, trainedDays: 0, dietDays: 0, history: [] };
-      }
-
-      if (record.trained?.toLowerCase() === "sim") {
-        studentData[email].trainedDays += 1;
-      }
-
-      if (record.diet?.toLowerCase() === "sim") {
-        studentData[email].dietDays += 1;
-      }
-
-      studentData[email].presences += 1;
-      studentData[email].history.push(record.responseDate);
-    }
-
-    const students: Student[] = Object.entries(studentData)
-      .map(([email, data]): Student => {
-        const fullName = records.find(r => r.email === email)?.fullName || 'N/A';
-        const presencePercentage = (data.presences / TOTAL_CLASSES) * 100;
-        return {
-          fullName,
-          email,
-          score: data.presences,
-          presencePercentage,
-          status: presencePercentage >= 75 ? 'good' : 'low',
-          history: data.history.sort((a, b) => b.getTime() - a.getTime()),
-        };
-      })
-      .sort((a, b) => b.score - a.score);
-
-    const totalStudents = students.length;
-    const totalPresences = records.length;
-
-    const totalTrainedToday = records.filter(r => r.trained?.toLowerCase() === "sim").length;
-    const totalDietToday = records.filter(r => r.diet?.toLowerCase() === "sim").length;
-
-    const averagePresence =
-      totalStudents > 0
-        ? students.reduce((acc, s) => acc + s.presencePercentage, 0) /
-          totalStudents
-        : 0;
-
-    const top5Students = students.slice(0, 5);
-
-    const presencesOverTime: { [key: string]: number } = {};
-    records.forEach(record => {
-      if (!record.responseDate) return;
-      const dateStr = record.responseDate.toISOString().split('T')[0];
-      if (!presencesOverTime[dateStr]) {
-        presencesOverTime[dateStr] = 0;
-      }
-      presencesOverTime[dateStr]++;
+  // Média de dieta por aluno
+  const dietStats = useMemo(() => {
+    const stats: { [name: string]: { total: number; count: number } } = {};
+    records.forEach(r => {
+      const name = r.fullName.trim();
+      const dietValue = parseFloat(r.diet.replace('%', '').trim()) || 0;
+      if (!stats[name]) stats[name] = { total: 0, count: 0 };
+      stats[name].total += dietValue;
+      stats[name].count += 1;
     });
-
-    const timeSeriesData: TimeSeriesData[] = Object.entries(presencesOverTime)
-      .map(([date, presences]) => ({ date, presences }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    return {
-      students,
-      totalStudents,
-      totalPresences,
-      totalTrainedToday,
-      totalDietToday,
-      averagePresence,
-      top5Students,
-      timeSeriesData,
-    };
+    return Object.entries(stats).map(([name, data]) => ({
+      name,
+      avg: (data.total / data.count).toFixed(1)
+    }));
   }, [records]);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
-      <Header
-        onAddNewRecord={addNewRecord}
-        currentView={view}
-        onSetView={setView}
-      />
-      <main className="p-4 sm:p-6 md:p-8">
-        {view === 'dashboard' && (
-          <Dashboard
-            totalPresences={processedData.totalPresences}
-            totalStudents={processedData.totalStudents}
-            averagePresence={processedData.averagePresence}
-            totalTrainedToday={processedData.totalTrainedToday}
-            totalDietToday={processedData.totalDietToday}
-            topStudents={processedData.top5Students}
-            studentsData={processedData.students}
-            timeSeriesData={processedData.timeSeriesData}
-            onStudentClick={(student) => setSelectedStudent(student)}
-          />
-        )}
+    <div className="min-h-screen bg-gray-50 text-gray-800">
+      <Header view={view} setView={setView} />
+      <main className="p-4">
+        {view === 'dashboard' && <Dashboard records={records} />}
         {view === 'students' && (
-          <StudentList
-            students={processedData.students}
-            onStudentClick={(student) => setSelectedStudent(student)}
-          />
+          <StudentList records={records} onSelect={setSelectedStudent} />
         )}
+        {view === 'dietas' && <DietDashboard dietStats={dietStats} />}
       </main>
       {selectedStudent && (
         <StudentDetailModal
           student={selectedStudent}
-          averagePresence={processedData.averagePresence}
+          records={records.filter(r => r.fullName === selectedStudent.name)}
           onClose={() => setSelectedStudent(null)}
         />
       )}
