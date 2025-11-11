@@ -6,19 +6,19 @@ interface DietData {
 }
 
 interface Props {
-  records?: DietData[]; // agora é opcional
+  records?: DietData[];
 }
 
-const DietDashboard: React.FC<Props> = ({ records = [] }) => {
-  if (!records || records.length === 0) {
+const DietDashboard: React.FC<Props> = ({ records }) => {
+  if (!Array.isArray(records) || records.length === 0) {
     return (
-      <div className="p-4 text-center text-gray-600">
-        Nenhum dado de dieta disponível.
+      <div className="p-6 text-center text-gray-400">
+        🔄 Carregando dados de dieta...
       </div>
     );
   }
 
-  const validRecords = records.filter(r => !isNaN(r.dietPercent));
+  const validRecords = records.filter(r => r && !isNaN(r.dietPercent));
 
   const average =
     validRecords.length > 0
@@ -40,9 +40,7 @@ const DietDashboard: React.FC<Props> = ({ records = [] }) => {
           <thead className="bg-gray-100">
             <tr>
               <th className="border border-gray-300 p-2 text-left">Aluno</th>
-              <th className="border border-gray-300 p-2 text-center">
-                % Dieta
-              </th>
+              <th className="border border-gray-300 p-2 text-center">% Dieta</th>
             </tr>
           </thead>
           <tbody>
