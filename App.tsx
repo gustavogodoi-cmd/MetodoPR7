@@ -1,20 +1,19 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { AttendanceRecord, Student } from './types';
+import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import StudentList from './components/StudentList';
 import StudentDetailModal from './components/StudentDetailModal';
-import { Header } from './components/Header';
 import DietDashboard from './components/DietDashboard';
+import { Header } from './components/Header';
 
 const App: React.FC = () => {
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [view, setView] = useState<'dashboard' | 'students' | 'dietas'>('dashboard');
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [records, setRecords] = useState<any[]>([]);
+  const [view, setView] = useState<'dashboard' | 'students' | 'diet'>('dashboard');
+  const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
 
   useEffect(() => {
     const SHEET_ID = "1MdDoijE28-1ZH37EdL446H-u5IgqdmbZwYjGt20qPps";
     const API_KEY = "AIzaSyAyIXDSpOqgxzU4jBR86Lqb__CidW84dZg";
-    const RANGE = "Dados!A:G"; // 7 colunas
+    const RANGE = "Dados!A:G";
 
     const fetchData = async () => {
       try {
@@ -28,81 +27,63 @@ const App: React.FC = () => {
           return;
         }
 
-        const rows = json.values.slice(1); // ignora cabeçalho
+        const rows = json.values.slice(1);
 
         const newRecords = rows.map((row: string[]) => {
-          const rawDate = row[0]; // Carimbo de data/hora (A)
-          const treinoDate = row[3]; // Data do treino (D)
-          const raw = (rawDate || treinoDate || "").trim();
-
-          const parseDate = (dateStr: string | undefined): Date | null => {
-            if (!dateStr) return null;
-            const s = dateStr.trim();
-
-            // Formato brasileiro dd/mm/yyyy ou dd/mm/yyyy hh:mm:ss
-            if (s.includes('/')) {
-              const [datePart, timePart] = s.split(' ');
-              const [day, month, year] = datePart.split(/[\/\-]/).map(Number);
-              const [hour, minute, second] = timePart ? timePart.split(':').map(Number) : [0, 0, 0];
-              const d = new Date(year, month - 1, day, hour, minute, second || 0);
-              return isNaN(d.getTime()) ? null : d;
-            }
-
-            const d = new Date(s);
-            return isNaN(d.getTime()) ? null : d;
-          };
-
-          const parsedDate = parseDate(raw);
+          const rawDate = row[0];
+          const rawTreinoDate = row[3];
+          const parsedDate = new Date(rawDate || rawTreinoDate);
 
           return {
-            fullName: row[1] || "Desconhecido",  // Nome do aluno (B)
-            trained: row[2] || "Não informado",   // Treinou hoje? (C)
-            trainingDate: row[3] || "Sem data",   // Data do treino (D)
-            email: row[5] || "sem_email",         // Endereço de e-mail (F)
-            diet: row[6] || "0",                  // Fez a dieta hoje? (G)
-            responseDate: parsedDate,             // Data convertida
+            fullName: row[1] || "Desconhecido",
+            trained: row[2] || "Não informado",
+            trainingDate: row[3] || "Sem data",
+            email: row[5] || "sem_email",
+            diet: row[6] || "Não informado",
+            dietPercent: Number((row[6] || "0").replace("%", "")) || 0,
+            responseDate: isNaN(parsedDate.getTime()) ? null : parsedDate,
           };
-        }).filter(Boolean) as AttendanceRecord[];
+        });
 
         setRecords(newRecords);
-      } catch (error) {
-        console.error("Erro ao buscar dados:", error);
+      } catch (err) {
+        console.error("Erro ao buscar dados:", err);
       }
     };
 
     fetchData();
   }, []);
 
-  // Média de dieta por aluno
-  const dietStats = useMemo(() => {
-    const stats: { [name: string]: { total: number; count: number } } = {};
-    records.forEach(r => {
-      const name = r.fullName.trim();
-      const dietValue = parseFloat(r.diet.replace('%', '').trim()) || 0;
-      if (!stats[name]) stats[name] = { total: 0, count: 0 };
-      stats[name].total += dietValue;
-      stats[name].count += 1;
-    });
-    return Object.entries(stats).map(([name, data]) => ({
-      name,
-      avg: (data.total / data.count).toFixed(1)
-    }));
-  }, [records]);
-
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      <Header view={view} setView={setView} />
-      <main className="p-4">
-        {view === 'dashboard' && <Dashboard records={records} />}
-        {view === 'students' && (
-          <StudentList records={records} onSelect={setSelectedStudent} />
-        )}
-        {view === 'dietas' && <DietDashboard dietStats={dietStats} />}
-      </main>
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <div className="flex justify-center gap-4 p-4">
+        <button
+          onClick={() => setView('dashboard')}
+          className={`px-4 py-2 rounded-lg ${view === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-white border'}`}
+        >
+          Dashboard
+        </button>
+        <button
+          onClick={() => setView('students')}
+          className={`px-4 py-2 rounded-lg ${view === 'students' ? 'bg-blue-600 text-white' : 'bg-white border'}`}
+        >
+          Alunos
+        </button>
+        <button
+          onClick={() => setView('diet')}
+          className={`px-4 py-2 rounded-lg ${view === 'diet' ? 'bg-blue-600 text-white' : 'bg-white border'}`}
+        >
+          Dieta
+        </button>
+      </div>
+
+      {view === 'dashboard' && <Dashboard records={records} />}
+      {view === 'students' && <StudentList records={records} onSelect={setSelectedStudent} />}
+      {view === 'diet' && <DietDashboard records={records} />}
       {selectedStudent && (
         <StudentDetailModal
           student={selectedStudent}
-          records={records.filter(r => r.fullName === selectedStudent.name)}
           onClose={() => setSelectedStudent(null)}
         />
       )}
